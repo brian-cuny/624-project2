@@ -1,6 +1,6 @@
 ---
-title: "xgboost"
-author: "Brian Weinfeld"
+title: "models"
+author: "Dan, Sarah, and Brian"
 date: "4/25/2019"
 output: html_document
 ---
@@ -10,13 +10,15 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache = TRU
 library(tidyverse)
 library(xgboost)
 library(caret)
+library(kernlab)
+library(randomForest)
 ```
 
 - load data sets
 
 ```{r}
-student.data.complete <- read_csv(file='./data/student_data_complete.csv')
-student.evaluation.complete <- read_csv(file='./data/student_evaluation_complete.csv')
+student.data.complete <- read.csv(file='./data/student_data_complete.csv')
+student.evaluation.complete <- read.csv(file='./data/student_evaluation_complete.csv')
 ```
 
 - train/test split
@@ -43,6 +45,8 @@ student.evaluation.complete <- listify(student.evaluation.complete)
 training <- listify(training)
 validation <- listify(validation)
 ```
+
+<h1> XG Boost</h1>
 
 - hyper parameters (selected via exploration)
 
@@ -81,10 +85,51 @@ model %>%
   plot()
 ```
 
+<h1> Support Vector Machine</h1>
+
+```{r, message=FALSE, warning=FALSE,cache=TRUE}
+set.seed(200)
+svmRTuned <- train(x = training$x,
+                   y = training$y,
+                   method="svmRadial", 
+                   preProc=c("center","scale"),
+                   tuneLength = 14,
+                   trControl = trainControl(method="cv"))
+
+svmRTuned
+svmRTuned$finalModel
+```
+
+```{r}
+svmRTuned %>%
+  varImp() %>%
+  plot()
+```
+
+<h2>Random Forest</h2>
+
+```{r warning=FALSE, message=FALSE, cache=TRUE}
+set.seed(200)
+rf <- randomForest(x = training$x,
+                   y = training$y, 
+                   importance=TRUE,
+                   ntree=1000)
+
+best_tree <- which(rf$mse==min(rf$mse))
+sqrt(rf$mse[best_tree])
+rf$rsq[best_tree]
+```
+
+```{r}
+rf$importance
+```
+
+<h2> Final Results </h2>
+
 - validation rmse (only run on final, best model)
 
 ```{r}
-#Metrics::rmse(predict(model, newdata=validation$x), validation$y)
+postResample(predict(svmRTuned, newdata=validation$x), validation$y)
 ```
 
 - retraining on ALL data
