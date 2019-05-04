@@ -1,0 +1,253 @@
+---
+title: "Technical Project"
+author: "Sarah, Dan, and Brian"
+date: "5/4/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(tidyverse)
+library(caret)
+library(xgboost)
+library(kernlab)
+library(randomForest)
+library(kableExtra)
+library(glmnet)
+library(DT)
+```
+
+# {.tabset}
+
+For this project we have been supplied with a document identifying the PH levels in cans manufactored by ABC Beverage along with a number of other piece of information about the manufactoring process. Our goal is to create a predictive model that will determine the PH level in a can by using the other available information. In this technical document we will outline how we prepared the data and selected our predictive model. Finally, we will use the selected model to make a number of predictions on a new set of data.
+
+## Data Preperation
+
+We began by reading in the provided files and plotting the missing data. The plot demonstrates that there is very little missing data and that it is widely spread across the samples. This indicates that we should be able to successfully impute the missing data without worrying about injected too much new information into the dataset.
+
+```{r warning=FALSE}
+student.data <- readxl::read_excel('./data/StudentData.xlsx')
+student.evaluation <- readxl::read_excel('./data/StudentEvaluation.xlsx')
+
+missing.data.plot <- function(data){
+  data %>%
+    VIM::aggr(col=c('navyblue', 'yellow'),
+      numbers=TRUE, sortVars=TRUE,
+      labels=names(data), cex.axis=.7,
+      gap=3, ylab=c('Missing Data', 'Pattern'), combined=TRUE
+    )
+}
+
+missing.data.plot(student.data)
+```
+
+We discovered that four samples are missing the response variable PH. There are a number of ways to address this issue but ultimately we decided to simply remove these samples. The goal of the model is to predict the PH level and we were concerned about biasing the data by imputing these values. In addition there is one major outlier whose PH level is several orders of magnitude higher than the other values. Although we ultimately selected a modeling technique that is robust to outliers, we believed that this value was either incorrectly recorded or the result of a massive abberation that is unlikely to be seen again. Thus, we felt it best to remove this sample.
+
+```{r}
+student.data %>%
+  ggplot(aes(PH, fill=PH > 9)) + 
+  geom_histogram(bins=30) +
+  theme_bw() +
+  theme(legend.position='none') +
+  labs(y='Count',
+       title='PH Levels in Training Data')
+
+student.data <- student.data %>%
+  filter(!is.na(student.data$PH),
+         student.data$PH < 9)
+```
+
+We created a simple data processing pipeline to fix a number of formatting issues with the data. We also one hot encoded the only categorical variable 'Brand'. Most importantly, this pipeline also imputes the missing data. We selected a powerful imputation method called MICE. In short, MICE functions by calculating a unique imputation model for each predictor treating that predictor as a response variable. This process is repeated several times until the imputed values stabilize.
+
+```{r}
+clean.cols <- function(name){
+  name <- gsub('\\s', '', name)
+  name <- tolower(name)
+  return(name)
+}
+
+pipeline <- function(data){
+  ph <- data$PH
+  
+  data <- data %>%
+    select(-PH) %>%
+    mutate(`Brand Code` = as.factor(`Brand Code`)) %>%
+    rename_all(list(f = ~clean.cols(.))) %>%
+    mice::mice(m=5, maxit=10, seed=123, printFlag=FALSE) %>%
+    mice::complete(1)
+  
+    x <- predict(dummyVars("~ .", data=data), newdata=data) %>%
+        as_tibble()
+  
+  return(cbind(ph, x))
+}
+
+student.data.complete <- pipeline(student.data)
+student.evaluation.complete <- pipeline(student.evaluation)
+```
+
+Finally, we confirm that all the data has been properly imputed.
+
+```{r}
+missing.data.plot(student.data.complete)
+```
+
+```{r}
+missing.data.plot(student.evaluation.complete)
+```
+
+With the data properly cleaned, we can now run our predictive model on it.
+
+## Model Development {.tabset}
+
+We began our exploration for a predictive model by separating out 20% of the training data to serve as our final validation data. We also split each data frame into a list for easier use in testing various predictive models.
+
+```{r}
+set.seed(123)
+
+listify <- function(data){
+  return(list('y' = data$ph, 'x' = data %>% select(-ph)))
+}
+
+part <- createDataPartition(student.data.complete$ph, p=0.8, list=FALSE)
+training <- student.data.complete %>%
+  filter(row_number() %in% part)
+validation <- student.data.complete %>%
+  filter(!row_number() %in% part)
+
+student.data.complete <- listify(student.data.complete)
+student.evaluation.complete <- listify(student.evaluation.complete)
+training <- listify(training)
+validation <- listify(validation)
+```
+
+We iterated over numerous different predictive models including a variety of different regression based and rule based models. The code for all of these tests is available in our repo. We ultimately settled on using a Random Forest model due to it achieving the best performance in our cross fold validated testing. The below tabs show a selected set of the models we trained.
+
+This model achieved an RMSE of $\approx0.0993$ in our cross validated testing and an $R^2 \approx 0.66$.
+
+### XG Boost
+
+```{r}
+grid <- expand.grid(nrounds = 2500,
+                    max_depth = 6,
+                    eta = 0.03,
+                    gamma = 0,
+                    colsample_bytree = 1,
+                    min_child_weight = 1,
+                    subsample = 0.5)
+
+control <- trainControl(method='cv',
+                        number=10,
+                        allowParallel = TRUE)
+
+model <- train(x = training$x,
+             y = training$y,
+             method = 'xgbTree',
+             tuneGrid = grid,
+             metric = 'RMSE',
+             trControl = control)
+
+model$results
+```
+
+The best XG Boost model performed nearly as well as the Random Forest model and would serve as a good alternative choice for a model if needed. 
+
+### Support Vector Machine
+
+```{r, message=FALSE, warning=FALSE,cache=TRUE}
+set.seed(200)
+svmRTuned <- train(x = training$x,
+                   y = training$y,
+                   method="svmRadial", 
+                   preProc=c("center","scale"),
+                   tuneLength = 14,
+                   trControl = trainControl(method="cv"))
+
+svmRTuned
+svmRTuned$finalModel
+```
+
+### Elastic Net
+
+```{r}
+training_set_matrix<-as.matrix(training$x)
+
+elastic_net_model<-glmnet(as.matrix(training_set_matrix[,-1]), training$y, family="gaussian", alpha=.65, standardize = TRUE)
+
+elnet_predict<-predict(elastic_net_model, s=elastic_net_model$lambda.1se, newx=as.matrix(training_set_matrix[,-1]))
+RMSE(elnet_predict, training$y)
+```
+
+### Random Forest
+
+```{r}
+set.seed(200)
+rf <- randomForest(x = training$x,
+                   y = training$y, 
+                   importance=TRUE,
+                   ntree=1000)
+
+best_tree <- which(rf$mse==min(rf$mse))
+sqrt(rf$mse[best_tree])
+rf$rsq[best_tree]
+```
+
+Below we can see the order of importance for each of the predictors in determining the response variable. This table also indicates that there are a number of predictors that could possibly be dropped from the model with little loss to the models predictive value. This may be an interesting avenue of exploration if we wanted to prioratize a model that can be easily interpreted. As it stands, while this model is highly accurate, it is not easy to interpret.
+
+```{r}
+rf$importance %>%
+  as.data.frame() %>%
+  rownames_to_column(var='predictor') %>%
+  arrange(desc(`%IncMSE`)) %>%
+  datatable()
+```
+
+With the model selected, we will finally run the model against the withheld validation data. This will give us a sense of how well the model will perform on data that it has never seen before. Our model scores a strong RMSE of appoximately 0.0975 with an $R^2$ of 0.7.
+
+```{r}
+postResample(predict(rf, newdata=validation$x), validation$y)
+```
+
+With the model trained and validated, we can make our final predictions
+
+## Predictions
+
+Before making our final predictions we are going to retrain the Random Forest model one last time. The model will be retrained with the same hyper-parameters, however this time we will train on ALL of the training data, including the previously withheld validation data. This step is often considered optional when creating a predictive model. Folding the validation data back into the model, while leaving everything else the same, can often allow our model to eek out just a bit more predictive ability due to the extra samples. However, the improvement is often very small (if at all) and as such this step will often be ignored if the training process is long. In our case, as the data set is small, we believe there is no downside to retraining the model.
+
+```{r}
+final.rf <- randomForest(x = student.data.complete$x,
+                   y = student.data.complete$y, 
+                   importance=TRUE,
+                   ntree=1000)
+```
+
+With the final model trained, we can finally make our predictions on the provided data.
+
+```{r}
+predictions <- predict(final.rf, newdata=student.evaluation.complete$x)
+predictions %>%
+  tibble::enframe(name = NULL) %>%
+  datatable()
+```
+
+Finally, as requested, we can write out the file in an Excel readable format.
+
+```{r}
+predictions %>%
+  tibble::enframe(name = NULL) %>%
+  rownames_to_column() %>%
+  rename(PH = value, 
+         row = rowname) %>%
+  write_excel_csv('./data/predictions.csv')
+```
+
+
+
+
+
+
+
+
+
+
+

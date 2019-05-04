@@ -1,6 +1,11 @@
 
 ---
-output:html_document
+output: 
+  html_document:
+    fig_retina: 1
+    css: r_style.css
+    includes:
+    in_header: header.html
 
 ---
 
@@ -19,9 +24,10 @@ output:html_document
 
 <div class="header">
 
-  <h1 style="color:white">Dan Wigodsky</h1>
-  <h2 style="color:white">Data 624 Project 2 data exploration</h2>
-  <h2 style="color:white">April 14, 2019</h2>
+  <h1 style="color:white">Brian Weinfeld, Sarah Wigodsky and Dan Wigodsky</h1>
+  <h2 style="color:white">Data 624 Project 2 -- data exploration preliminary</h2>
+  <h2 style="color:white">collaboration with </h2>
+  <h2 style="color:white">May 3, 2019</h2>
 
 </div>
 
@@ -31,7 +37,7 @@ options(width = 200)
 suppressWarnings(suppressMessages(library(fpp2)))
 suppressWarnings(suppressMessages(library(e1071)))
 suppressWarnings(suppressMessages(library(showtext)))
-suppressWarnings(suppressMessages(library(ggplot2)))
+suppressWarnings(suppressMessages(library(tidyverse)))
 suppressWarnings(suppressMessages(library(kableExtra)))
 suppressWarnings(suppressMessages(library(expsmooth)))
 suppressWarnings(suppressMessages(library(seasonal)))
@@ -47,45 +53,69 @@ suppressWarnings(suppressMessages(library(EnvStats)))
 suppressWarnings(suppressMessages(library(car)))
 
 font_add_google(name = "Corben", family = "corben", regular.wt = 400, bold.wt = 700)
-set.seed(127)
+set.seed(123)
 ```  
 
+#####Our dataset consists of 36 variables.  One is our target variable, ph.  4 Variables are based on brand.  For regression models, we'll use three of these, with brand a as the base class. Based on Cook's distance, we removed 8 variables.   For our regression based models, this improved RMSE by ~.003.  2354 had the highest Cook's Distance, ~.1.
 ```{r data,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=7,fig.height=7,fig.showtext = TRUE}
-beverage_set<-read.csv('https://raw.githubusercontent.com/brian-cuny/624-project2/master/data/CleanedData.csv')
-beverage_corr_set<-beverage_set[,-2]
-beverage_set<-beverage_set[-c(690,1093,2355,1942,1897,2083,475,1842),]
-str(beverage_set)
+beverage_set<-read.csv('https://raw.githubusercontent.com/brian-cuny/624-project2/master/data/student_data_complete.csv')
+beverage_corr_set<-beverage_set
+beverage_set<-beverage_set[-c(2354,2082,690,1896,1841,475,2562,2149),]
 
-multi_model<-lm(data = beverage_set, ph~.)
-summary(multi_model)
+#690,1093,2355,1942,1897,2083,475,1842
+
+multi_model<-lm(data = beverage_set[,c(1,3:36)], ph~.)
+
 cutoff <- 4/((nrow(beverage_set)-length(multi_model$coefficients)-2)) 
 plot(multi_model, which=4, cook.levels=cutoff)
 influencePlot(multi_model, id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )
-
-beverage_set[1093,]
+```  
+  
+#####A multiple regression was formed our basis for our outlier investigation.  Within our model, 13 variables were signifcant at .001 significance :brand code b, mnfflow, carbpressure1, hydpressure3, temperature, usagecont, density, balling, pressurevacuum, oxygenfiller, bowlsetpoint, pressuresetpoint, ballinglvl.  An additionel 6 variables were significant at .05.
+```{r relationships,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=7,fig.height=7,fig.showtext = TRUE}
+summary(multi_model)
 correl.matrix<-cor(beverage_corr_set, use= "complete.obs")
 corrplot(correl.matrix,method= "color" , type= "upper")
 ```  
   
-We check the variables for multi-collinearity.
-Since some had levels and accounted for more then one df, gvif was used intead of vif.  The threshold should be 25 or 100.  None of our variables passed this threshold.  
+#####Some of our variables showed high correlation with each other. We can see stripes of dark color along balling and ballinglvl.  We check the variables for multi-collinearity.  Many of our variables were high in vif.  To remove this concern, we built a model that removed variables until all had a vif score of less than 10.  
 
 ```{r vif,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=13,fig.height=5,fig.showtext = TRUE}
-gvif_scaled<-vif(multi_model)[,3]
-gvif_scaled_rows<-rownames(vif(multi_model))
+beverage_vif_set<-beverage_set[,c(1:2,4:36)]
+vif_model<-lm(data = beverage_vif_set, ph~.)
+vif_values<-vif(vif_model)
+vif_values_rows<-names(vif(vif_model))
+vif_values<-as.data.frame(cbind.data.frame(as.character(vif_values_rows),as.numeric(vif_values)))
+colnames(vif_values)<-c('variable','variable_vif')
+vif_values <-vif_values[which(vif_values$variable_vif>10),]
+ggplot(data=vif_values, aes(y=variable_vif,x=variable)) + geom_bar(stat='identity',fill='#b5c6fc') + theme(panel.background = element_rect(fill = '#707996'),text = element_text(family = 'corben',color='#249382',size=38),axis.text.x = element_text(angle = 30, hjust = .9)) + ggtitle('Variables with the highest vif')
+#lower_vif_model<-lm(data = beverage_vif_set[,-c(4,8,9,18,27,30,35)], ph~.)#these columns matched the first set
+lower_vif_model<-lm(data = beverage_vif_set[,-c(27,35,8,9,33,30,18,20)], ph~.)
+```  
+  
+#####Our low-VIF model kept 26 predictive variables.  16 of them are significant at .05.  We also ran a forward stepwise regression model, but it only eliminated 2 variables and didn't change the model's preformance.  A partial least squares regression will also be tried.  Then, a regression model with a k-means variable augmentation and an elastic net model are also built before moving on to non-regression models.  
+  
+```{r vif-b,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=13,fig.height=5,fig.showtext = TRUE}
 
-gvif_scaled<-as.data.frame(cbind.data.frame(as.character(gvif_scaled_rows),as.numeric(gvif_scaled)))
-colnames(gvif_scaled)<-c('variable','scaled_gvif')
-gvif_scaled <-gvif_scaled[which(gvif_scaled$scaled_gvif>3.4),]
-ggplot(data=gvif_scaled, aes(y=scaled_gvif,x=variable)) + geom_bar(stat='identity',fill='#b5c6fc') + theme(panel.background = element_rect(fill = '#707996'),text = element_text(family = 'corben',color='#249382',size=38),axis.text.x = element_text(angle = 30, hjust = .9)) + ggtitle('Variables with the highest gvif')
+summary(lower_vif_model)
+vif(lower_vif_model)[1:9]
+vif(lower_vif_model)[10:18]
+vif(lower_vif_model)[19:26]
 ```  
 
 ```{r plots,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 
-label_set<-c('ph','brandcode', 'carbvolume', 'fillounces', 'pcvolume', 'carbpressure', 'carbtemp', 'psc', 'pscfill', 'pscco2', 'mnfflow', 'carbpressure1', 'fillpressure', 'hydpressure1', 'hydpressure2', 'hydpressure3', 'hydpressure4', 'fillerlevel', 'fillerspeed', 'temperature', 'usagecont', 'carbflow', 'density', 'mfr', 'balling', 'pressurevacuum', 'oxygenfiller', 'bowlsetpoint', 'pressuresetpoint', 'airpressurer', 'alchrel', 'carbrel', 'ballinglvl')
+label_set<-c('ph','brandcode.A','brandcode.B','brandcode.C','brandcode.D', 'carbvolume', 'fillounces', 'pcvolume', 'carbpressure', 'carbtemp', 'psc', 'pscfill', 'pscco2', 'mnfflow', 'carbpressure1', 'fillpressure', 'hydpressure1', 'hydpressure2', 'hydpressure3', 'hydpressure4', 'fillerlevel', 'fillerspeed', 'temperature', 'usagecont', 'carbflow', 'density', 'mfr', 'balling', 'pressurevacuum', 'oxygenfiller', 'bowlsetpoint', 'pressuresetpoint', 'airpressurer', 'alchrel', 'carbrel', 'ballinglvl')
 
 plotter <- function(df, label_set,lab_num,colorbar='#dee253') {ggplot(df, aes_string(x = label_set[lab_num],y = df$ph)) + geom_point(alpha=.9,color='#65b285') + ylab('ph level')+xlab(label_set[lab_num])+ theme(axis.text.x = element_text(angle = 30, hjust = .9),text = element_text(family ='corben',color='#249382',size=16)) }
-                                                                                                          
+```  
+  
+#Variables compared to ph{.tabset .tabset-dropdown}  
+  
+##A  
+  
+```{r plots-taba,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
+
 plotter(beverage_set,label_set,2)
 plotter(beverage_set,label_set,3)
 plotter(beverage_set,label_set,4)
@@ -93,6 +123,12 @@ plotter(beverage_set,label_set,5)
 plotter(beverage_set,label_set,6)
 plotter(beverage_set,label_set,7)
 plotter(beverage_set,label_set,8)
+
+```  
+  
+##B  
+  
+```{r plots-tabb,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 plotter(beverage_set,label_set,9)
 plotter(beverage_set,label_set,10)
 plotter(beverage_set,label_set,11)
@@ -100,6 +136,12 @@ plotter(beverage_set,label_set,12)
 plotter(beverage_set,label_set,13)
 plotter(beverage_set,label_set,14)
 plotter(beverage_set,label_set,15)
+
+```  
+  
+##C  
+  
+```{r plots-tabc,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 plotter(beverage_set,label_set,16)
 plotter(beverage_set,label_set,17)
 plotter(beverage_set,label_set,18)
@@ -107,6 +149,12 @@ plotter(beverage_set,label_set,19)
 plotter(beverage_set,label_set,20)
 plotter(beverage_set,label_set,21)
 plotter(beverage_set,label_set,22)
+
+```  
+  
+##D  
+  
+```{r plots-tabd,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 plotter(beverage_set,label_set,23)
 plotter(beverage_set,label_set,24)
 plotter(beverage_set,label_set,25)
@@ -114,78 +162,284 @@ plotter(beverage_set,label_set,26)
 plotter(beverage_set,label_set,27)
 plotter(beverage_set,label_set,28)
 plotter(beverage_set,label_set,29)
+
+```  
+  
+##E  
+  
+```{r plots-tabe,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 plotter(beverage_set,label_set,30)
 plotter(beverage_set,label_set,31)
 plotter(beverage_set,label_set,32)
 plotter(beverage_set,label_set,33)
+plotter(beverage_set,label_set,34)
+plotter(beverage_set,label_set,35)
+plotter(beverage_set,label_set,36)
 ```  
+  
+#
 
 ```{r validation-set-separation,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE} 
-validation_indices<-sample.int(length(beverage_set$ph),size=.2*length(beverage_set$ph))
-validation_set<-beverage_set[validation_indices,]
-training_set<-beverage_set[-validation_indices,]
+part <- createDataPartition(beverage_set$ph, p=0.8, list=FALSE)
+training_set <- beverage_set %>%
+  filter(row_number() %in% part)
+validation_set <- beverage_set %>%
+  filter(!row_number() %in% part)
 ```  
-We look for a kmeans clustering augmented regression model.
-#NOTE: This needs further refining.  A better set of regression vars should be set by forward selection first.
+  
+#RMSE with the validation set for regression-based models {.tabset .tabset-dropdown}  
+  
+##basic multi-regression  
+```{r RMSE comparison,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
+print('RMSE for multi-regression model')
+RMSE(predict(multi_model,validation_set),validation_set[,1])
+```  
+  
+##regression without high-vif variables  
+```{r RMSE comparison-b,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
+print('RMSE for model with high-vif variables removed')
+RMSE(predict(lower_vif_model,validation_set[,-c(3,28,36,9,10,34,31,19,21)]),validation_set[,1])
+```  
+  
+##partial least squares regression  
+```{r RMSE comparison-c,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
+#We set a control set to create a 10-fold cross validation
+ctrl<- trainControl(method= 'CV', number = 10)
+training_set_matrix<-as.matrix(training_set)
+pls_model<-train(ph~.,data=training_set_matrix,
+            method='pls',
+            tuneLength=10,
+            trControl=ctrl,
+            preProc = c('center','scale'))
+summary(pls_model)
+print('Correlation and RMSE for pls - oscorepls -  method')
+RMSE(predict(pls_model,newdata=validation_set),validation_set[,1])
+#gbmImp <- varImp(pls_model, scale = FALSE)
+#plot(gbmImp, top = 10)
+pls_model<-train(ph~.,data=training_set_matrix,
+            method='simpls',
+            tuneLength=10,
+            trControl=ctrl,
+            preProc = c('center','scale'))
+summary(pls_model)
+print('Correlation and RMSE for pls - simpls -  method')
+RMSE(predict(pls_model,newdata=validation_set),validation_set[,1])
+```  
+  
+#
+  
+#####<br>  
+#####<br>  
+#####<br>  
+#####We turn to a final set of two regression-based models.  We look for a kmeans clustering augmented regression model.  Adjusted r squared doesn't change much for models using different numbers of means.  
   
 ```{r means-augmented,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=6,fig.height=6,fig.showtext = TRUE}    
-adjusted_r_squared_set<-rep(0,20)
-wss_set<-rep(0,20)
-for (i in 1:20){
-km_model<-kmeans(training_set[,c(3:33)],i*5)
+adjusted_r_squared_set<-rep(0,10)
+wss_set<-rep(0,10)
+km_train_set<-as.data.frame(training_set[,c(2:36)])#This dataframe allows kmeans to run
+for (i in 1:10){
+km_model<-kmeans(km_train_set,i*10-5)
 means_group<-matrix(km_model)
 wss_set[i]<-km_model$tot.withinss
-training_set_kmeans<-cbind(training_set,means_group[1])
-colnames(training_set_kmeans)[34]<-'means_group'
+training_set_kmeans<-cbind.data.frame (training_set,means_group[1])#This dataframe is augmented with the results of the kmeans category creation
+colnames(training_set_kmeans)[36]<-'means_group'
 kmeans_model<-lm(data=training_set_kmeans,ph~.)
 adjusted_r_squared_set[i]<-summary(kmeans_model)[9]
 }
-adjusted_r_squared_set
+#print('R squared for different numbers of means:')
+#rows_for_table<-c('5 means','15 means','25 means','35 means','45 means','55 means','65 means','75 means','85 means','95 means')
+#adjusted_r_squared_set<-cbind(rows_for_table,adjusted_r_squared_set)
 
-plot(y=wss_set,x=seq(5,100, by=5),main="within sum of squares by number of means",xlab="number of clusters",ylab="wss")
-#The best model by wss is the 55 means cluster
-km_model<-kmeans(training_set[,c(3,17,21,23,25,30,31,33,7,16)],55)
+plot(y=wss_set,x=seq(5,95, by=10),main="within sum of squares by number of means",xlab="number of clusters",ylab="wss")
+#The best model by wss is the 65 means cluster
+km_model<-kmeans(km_train_set,65)
 training_set_kmeans<-cbind(training_set,means_group[1])
-colnames(training_set_kmeans)[34]<-'means_group'
+colnames(training_set_kmeans)[37]<-'means_group'
 kmeans_model<-lm(data=training_set_kmeans,ph~.)
 #create a cluster in the validation set
-means_group<-kmeans(validation_set[,c(3,17,21,23,25,30,31,33,7,16)],55)
-validation_set_km<-cbind(validation_set,means_group[1])
-colnames(validation_set_km)[34]<-'means_group'
-accuracy( predict(kmeans_model, validation_set_km), validation_set_km[,1])[2]
+km_validation_set<-as.data.frame(validation_set[,c(2:36)])#as dataframe so kmeans works
+means_group<-kmeans(km_validation_set,65)
+validation_set_km<-cbind(validation_set,means_group[1])#augment with kmeans group
+colnames(validation_set_km)[37]<-'means_group'
+print('kmeans augmented regression RMSE:')
+RMSE( predict(kmeans_model, validation_set_km), validation_set_km[,1])
 ```  
   
-This will be RMSE of basic multi-regression as benchmark  
+#####An elastic net model is attempted with the glmnet to try lasso/ridge regressions.  Both shrink the effects of betas.  The lasso selects features and does shrinkage.  The glmnet mixes between the two models.  Our best model uses an alpha of .65, whereas a lasso model uses 1 for alpha.  
   
-#NOTE: FORWARD STEPWISE SHOULD BE ADDED
-```{r base-models,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=6,fig.height=6,fig.showtext = TRUE}   
-multi_model<-lm(data = training_set, ph~.)
-summary(multi_model)
-accuracy(predict(multi_model,validation_set),validation_set[,1])
-```
-Clustering enhanced the regression performance with the validation set, but only slightly
-Even more performance was achieved by choosing variables for the clustering analysis.  Variables were chosen by VIF, by scatterplot, and corrplot.  In the scatterplot, variables were chosen that appeared to have a combination of dicrete levels and difference between levels.  In the corrplot, variables with fairly high absolute value correlation with other indep. variables were chosen.
-(3,17,21,23,25,30,31,33,7,16)  -  RMSE = .1305528  vs. RMSE = .1307519
-
-An elastic net model is attempted with the glmnet to try lasso/ridge regressions.  Both shrink the effects of betas.  The lasso selects features and does shrinkage.  The glmnet mixes between the two models.  
-  
-#NOTE: change brand to numeric
-
 ```{r elastic net,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=6,fig.height=6,fig.showtext = TRUE}
 #Brand was taken out so elasticnet would run.  It needs to be changed to numeric
-training_set_elnet<-training_set[,-(2)]
-validation_set_elnet<-as.matrix(validation_set[,-(2)])
-elastic_net_model<-glmnet(as.matrix(training_set_elnet[,-1]), training_set_elnet[,1], family="gaussian", alpha=.9, standardize = TRUE)
+#training_set_elnet<-training_set[,-(2)]
+elastic_net_model<-glmnet(as.matrix(training_set_matrix[,-1]), training_set_matrix[,1], family="gaussian", alpha=.65, standardize = TRUE)
 plot(elastic_net_model)
-
-elnet_predict<-predict(elastic_net_model, s=elastic_net_model$lambda.1se, newx=validation_set_elnet[,-1])
-RMSE(elnet_predict,validation_set_elnet[,1])
+elnet_predict<-predict(elastic_net_model, s=elastic_net_model$lambda.1se, newx=as.matrix(validation_set[,-1]))
+RMSE(elnet_predict,validation_set[,1])
 ```
 
+source for Cook's distance plot: https://www.statmethods.net/stats/rdiagnostics.html
+#gvif cutoff: https://stats.stackexchange.com/questions/70679/which-variance-inflation-factor-should-i-be-using-textgvi#f-or-textgvif  --answer by fox
 
+appendix:
+------------------------------------------------
+set.seed(123)  
+beverage_set<-read.csv('https://raw.githubusercontent.com/brian-cuny/624-project2/master/data/student_data_complete.csv')  
+beverage_corr_set<-beverage_set  
+beverage_set<-beverage_set[-c(2354,2082,690,1896,1841,475,2562,2149),]  
+
+ #690,1093,2355,1942,1897,2083,475,1842 --original vals   
+multi_model<-lm(data = beverage_set[,c(1,3:36)], ph~.)  
+
+cutoff <- 4/((nrow(beverage_set)-length(multi_model$coefficients)-2))  
+plot(multi_model, which=4, cook.levels=cutoff)  
+influencePlot(multi_model, id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )  
+
+summary(multi_model)  
+correl.matrix<-cor(beverage_corr_set, use= "complete.obs")  
+corrplot(correl.matrix,method= "color" , type= "upper")  
+
+beverage_vif_set<-beverage_set[,c(1:2,4:36)]  
+vif_model<-lm(data = beverage_vif_set, ph~.)  
+vif_values<-vif(vif_model)  
+vif_values_rows<-names(vif(vif_model))  
+vif_values<-as.data.frame(cbind.data.frame(as.character(vif_values_rows),as.numeric(vif_values)))  
+colnames(vif_values)<-c('variable','variable_vif')  
+vif_values <-vif_values[which(vif_values$variable_vif>10),]  
+ggplot(data=vif_values, aes(y=variable_vif,x=variable)) +   geom_bar(stat='identity',fill='#b5c6fc') + theme(panel.background = element_rect(fill =   '#707996'),text = element_text(family = 'corben',color='#249382',size=38),axis.text.x =   element_text(angle = 30, hjust = .9)) + ggtitle('Variables with the highest vif')  
+ #lower_vif_model<-lm(data = beverage_vif_set[,-c(4,8,9,18,27,30,35)], ph~.)  #these columns   matched the first set  
+lower_vif_model<-lm(data = beverage_vif_set[,-c(27,35,8,9,33,30,18,20)], ph~.)  
+
+summary(lower_vif_model)  
+vif(lower_vif_model)[1:9]  
+vif(lower_vif_model)[10:18]  
+vif(lower_vif_model)[19:26]  
+
+label_set<-c('ph','brandcode.A','brandcode.B','brandcode.C','brandcode.D', 'carbvolume',   'fillounces', 'pcvolume', 'carbpressure', 'carbtemp', 'psc', 'pscfill', 'pscco2', 'mnfflow', 'carbpressure1', 'fillpressure', 'hydpressure1', 'hydpressure2', 'hydpressure3', 'hydpressure4', 'fillerlevel', 'fillerspeed', 'temperature', 'usagecont', 'carbflow', 'density', 'mfr', 'balling', 'pressurevacuum', 'oxygenfiller', 'bowlsetpoint', 'pressuresetpoint', 'airpressurer', 'alchrel', 'carbrel', 'ballinglvl')  
+
+plotter <- function(df, label_set,lab_num,colorbar='#dee253') {ggplot(df, aes_string(x = label_set[lab_num],y = df$ph)) + geom_point(alpha=.9,color='#65b285') + ylab('ph level')+xlab(label_set[lab_num])+ theme(axis.text.x = element_text(angle = 30, hjust = .9),text = element_text(family ='corben',color='#249382',size=16)) }  
+
+plotter(beverage_set,label_set,2)  
+plotter(beverage_set,label_set,3)  
+plotter(beverage_set,label_set,4)  
+plotter(beverage_set,label_set,5)  
+plotter(beverage_set,label_set,6)  
+plotter(beverage_set,label_set,7)  
+plotter(beverage_set,label_set,8)  
+
+plotter(beverage_set,label_set,9)  
+plotter(beverage_set,label_set,10)  
+plotter(beverage_set,label_set,11)   
+plotter(beverage_set,label_set,12)  
+plotter(beverage_set,label_set,13)  
+plotter(beverage_set,label_set,14)  
+plotter(beverage_set,label_set,15)  
+
+plotter(beverage_set,label_set,16)  
+plotter(beverage_set,label_set,17)  
+plotter(beverage_set,label_set,18)  
+plotter(beverage_set,label_set,19)  
+plotter(beverage_set,label_set,20)  
+plotter(beverage_set,label_set,21)  
+plotter(beverage_set,label_set,22)  
+
+plotter(beverage_set,label_set,23)  
+plotter(beverage_set,label_set,24)  
+plotter(beverage_set,label_set,25)  
+plotter(beverage_set,label_set,26)  
+plotter(beverage_set,label_set,27)  
+plotter(beverage_set,label_set,28)  
+plotter(beverage_set,label_set,29)  
+
+plotter(beverage_set,label_set,30)  
+plotter(beverage_set,label_set,31)  
+plotter(beverage_set,label_set,32)  
+plotter(beverage_set,label_set,33)  
+plotter(beverage_set,label_set,34)  
+plotter(beverage_set,label_set,35)  
+plotter(beverage_set,label_set,36)  
+
+part <- createDataPartition(beverage_set$ph, p=0.8, list=FALSE)  
+training_set <- beverage_set %>%  
+  filter(row_number() %in% part)  
+validation_set <- beverage_set %>%  
+  filter(!row_number() %in% part)  
+  
+ #RMSE with the validation set for regression-based models {.tabset .tabset-dropdown}  
+  
+  ##basic multi-regression  
+
+print('RMSE for multi-regression model')  
+RMSE(predict(multi_model,validation_set),validation_set[,1])  
+
+  
+ ##regression without high-vif variables  
+
+print('RMSE for model with high-vif variables removed')  
+RMSE(predict(lower_vif_model,validation_set[,-c(3,28,36,9,10,34,31,19,21)]),validation_set[,1])  
+ 
+ ##partial least squares regression  
+
+ #We set a control set to create a 10-fold cross validation
+ctrl<- trainControl(method= 'CV', number = 10)
+training_set_matrix<-as.matrix(training_set)
+pls_model<-train(ph~.,data=training_set_matrix,
+            method='pls',
+            tuneLength=10,
+            trControl=ctrl,
+            preProc = c('center','scale'))
+summary(pls_model)
+print('Correlation and RMSE for pls - oscorepls -  method')
+RMSE(predict(pls_model,newdata=validation_set),validation_set[,1])
+ #gbmImp <- varImp(pls_model, scale = FALSE)
+ #plot(gbmImp, top = 10)
+pls_model<-train(ph~.,data=training_set_matrix,
+            method='simpls',
+            tuneLength=10,
+            trControl=ctrl,
+            preProc = c('center','scale'))
+summary(pls_model)
+print('Correlation and RMSE for pls - simpls -  method')
+RMSE(predict(pls_model,newdata=validation_set),validation_set[,1])
+ 
+adjusted_r_squared_set<-rep(0,10)  
+wss_set<-rep(0,10)  
+km_train_set<-as.data.frame(training_set[,c(2:36)])#This dataframe allows kmeans to run  
+for (i in 1:10){  
+km_model<-kmeans(km_train_set,i*10-5)  
+means_group<-matrix(km_model)  
+wss_set[i]<-km_model$tot.withinss  
+training_set_kmeans<-cbind.data.frame (training_set,means_group[1])#This dataframe is   augmented with the results of the kmeans category creation  
+colnames(training_set_kmeans)[36]<-'means_group'  
+kmeans_model<-lm(data=training_set_kmeans,ph~.)  
+adjusted_r_squared_set[i]<-summary(kmeans_model)[9]  
+}  
+ #print('R squared for different numbers of means:')  
+ #rows_for_table<-c('5 means','15 means','25 means','35 means','45 means','55 means','65  means','75 means','85 means','95 means')  
+ #adjusted_r_squared_set<-cbind(rows_for_table,adjusted_r_squared_set)  
+
+plot(y=wss_set,x=seq(5,95, by=10),main="within sum of squares by number of   means",xlab="number of clusters",ylab="wss")  
+ #The best model by wss is the 65 means cluster  
+km_model<-kmeans(km_train_set,65)  
+training_set_kmeans<-cbind(training_set,means_group[1])  
+colnames(training_set_kmeans)[37]<-'means_group'  
+kmeans_model<-lm(data=training_set_kmeans,ph~.)  
+ #create a cluster in the validation set  
+km_validation_set<-as.data.frame(validation_set[,c(2:36)])#as dataframe so kmeans works  
+means_group<-kmeans(km_validation_set,65)  
+validation_set_km<-cbind(validation_set,means_group[1])#augment with kmeans group  
+colnames(validation_set_km)[37]<-'means_group'  
+print('kmeans augmented regression RMSE:')  
+RMSE( predict(kmeans_model, validation_set_km), validation_set_km[,1])  
+
+ #Brand was taken out so elasticnet would run.  It needs to be changed to numeric  
+ #training_set_elnet<-training_set[,-(2)]  
+elastic_net_model<-glmnet(as.matrix(training_set_matrix[,-1]), training_set_matrix[,1],   family="gaussian", alpha=.65, standardize = TRUE)  
+plot(elastic_net_model)  
+elnet_predict<-predict(elastic_net_model, s=elastic_net_model$lambda.1se,   newx=as.matrix(validation_set[,-1]))  
+RMSE(elnet_predict,validation_set[,1])  
 
 
 source for Cook's distance plot: https://www.statmethods.net/stats/rdiagnostics.html
-gvif cutoff: https://stats.stackexchange.com/questions/70679/which-variance-inflation-factor-should-i-be-using-textgvif-or-textgvif  --answer by fox
+ #gvif cutoff: https://stats.stackexchange.com/questions/70679/which-variance-inflation-factor-should-i-be-using-textgvi#f-or-textgvif  --answer by fox  ---This changed because of a change in the brand variable  
+
 
 
