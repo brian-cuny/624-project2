@@ -1,6 +1,6 @@
 ---
 title: "Technical Project"
-author: "Sarah, Dan, and Brian"
+author: "Sarah Wigodsky, Dan Wigodsky, and Brian Weinfeld"
 date: "5/4/2019"
 output: html_document
 ---
@@ -15,6 +15,10 @@ library(randomForest)
 library(kableExtra)
 library(glmnet)
 library(DT)
+library(corrplot)
+library(car)
+
+sysfonts::font_add_google(name = "Corben", family = "corben", regular.wt = 400, bold.wt = 700)
 ```
 
 # {.tabset}
@@ -97,6 +101,66 @@ missing.data.plot(student.evaluation.complete)
 ```
 
 With the data properly cleaned, we can now run our predictive model on it.
+
+## EDA {.tabset}
+
+After cleaning the data we proceeded to perform exploratorary data analysis in order to better understand the data set that we are working with. Our dataset consists of 36 variables. One is our target variable, ph. 4 Variables are based on brand. For regression models, we'll use three of these, with brand a as the base class. Based on Cook's distance, we removed 8 variables.  For our regression based models, this improved RMSE by $\approx .003$. 2354 had the highest Cook's Distance, $\approx .1$.
+
+```{r fig.width=7, fig.height=7, warning=FALSE}
+multi.model <- student.data.complete %>%
+  select(-2) %>%
+  filter(!row_number() %in% c(2354,2082,690,1896,1841,475,2562,2149)) %>%
+  lm(data=., ph~.)
+
+multi.model %>%
+  influencePlot(id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )
+```
+
+Within our model, 13 variables were signifcant at .001 significance: brand code b, mnfflow, carbpressure1, hydpressure3, temperature, usagecont, density, balling, pressurevacuum, oxygenfiller, bowlsetpoint, pressuresetpoint, ballinglvl.  An additionel 6 variables were significant at .05.
+
+```{r}
+multi.model %>%
+  summary()
+```
+
+We found strong levels of correlation (both positive and negative) for a variety of features. We can see stripes of dark color along balling and ballinglvl.
+
+```{r fig.width=7,fig.height=7,fig.showtext = TRUE}
+student.data.complete %>%
+  cor(use='complete.obs') %>%
+  corrplot(method='color', type='upper')
+```
+
+Some of our variables showed high correlation with each other. We can see stripes of dark color along balling and ballinglvl.  We check the variables for multi-collinearity.  Many of our variables were high in vif.  To remove this concern in our regression models, we built a model that removed variables until all had a vif score of less than 10.  
+
+```{r fig.width=13, fig.height=5, fig.showtext=TRUE, warning=FALSE}
+student.data.complete %>%
+  select(c(1:2, 4:36)) %>%
+  lm(data=., ph~.) %>%
+  vif() %>%
+  tibble('variable' = names(.), 'variable_vif' = .) %>%
+  filter(variable_vif > 10) %>%
+  ggplot(aes(variable, variable_vif)) + 
+  geom_bar(stat='identity', fill='#b5c6fc') + 
+  theme(panel.background = element_rect(fill = '#707996'),
+        text = element_text(family = 'corben', color='#249382', size=35),
+        axis.text.x = element_text(angle = 30, hjust = .9)
+        ) + 
+  labs(x = 'Variable', 
+       y = 'VIF',
+       title = 'Variables with the highest vif')
+```
+
+Below is a comparison of the distributions between each feature and the response variable PH.
+
+```{r fig.height=18, fig.width=10}
+student.data.complete %>%
+  gather(key='key', value='value', -ph) %>%
+  ggplot(aes(value, ph)) + 
+  geom_point(alpha=.9,color='#65b285') + 
+  facet_wrap(~key, scales='free_x', ncol=4) +
+  labs(y='PH')
+```
 
 ## Model Development {.tabset}
 
