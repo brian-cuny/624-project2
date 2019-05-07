@@ -1,7 +1,7 @@
 ---
 title: "Technical Project"
 author: "Sarah Wigodsky, Dan Wigodsky, and Brian Weinfeld"
-date: "5/4/2019"
+date: "5/7/2019"
 output: html_document
 ---
 
@@ -23,11 +23,11 @@ sysfonts::font_add_google(name = "Corben", family = "corben", regular.wt = 400, 
 
 # {.tabset}
 
-For this project we have been supplied with a document identifying the PH levels in cans manufactored by ABC Beverage along with a number of other piece of information about the manufactoring process. Our goal is to create a predictive model that will determine the PH level in a can by using the other available information. In this technical document we will outline how we prepared the data and selected our predictive model. Finally, we will use the selected model to make a number of predictions on a new set of data.
+New regulations require us to better understand the manufacturing process of our beverages.  In this report, we will demonstrate the process by which we created a predictive model that will determine the PH level in a can. We will outline how we prepared the data and selected our predictive model. Finally, we will use the selected model to make predictions on a new set of data.
 
-## Data Preperation
+## Data Preparation
 
-We began by reading in the provided files and plotting the missing data. The plot demonstrates that there is very little missing data and that it is widely spread across the samples. This indicates that we should be able to successfully impute the missing data without worrying about injected too much new information into the dataset.
+To prepare the data for building models, we plotted the missing data. There is very little missing data, and it is widely spread across the samples. This indicates that we should be able to successfully impute the missing data without worrying about injecting too much new information into the data set.
 
 ```{r warning=FALSE}
 student.data <- readxl::read_excel('./data/StudentData.xlsx')
@@ -37,7 +37,7 @@ missing.data.plot <- function(data){
   data %>%
     VIM::aggr(col=c('navyblue', 'yellow'),
       numbers=TRUE, sortVars=TRUE,
-      labels=names(data), cex.axis=.7,
+      labels=names(data), cex.axis=.6,
       gap=3, ylab=c('Missing Data', 'Pattern'), combined=TRUE
     )
 }
@@ -45,7 +45,7 @@ missing.data.plot <- function(data){
 missing.data.plot(student.data)
 ```
 
-We discovered that four samples are missing the response variable PH. There are a number of ways to address this issue but ultimately we decided to simply remove these samples. The goal of the model is to predict the PH level and we were concerned about biasing the data by imputing these values. In addition there is one major outlier whose PH level is several orders of magnitude higher than the other values. Although we ultimately selected a modeling technique that is robust to outliers, we believed that this value was either incorrectly recorded or the result of a massive abberation that is unlikely to be seen again. Thus, we felt it best to remove this sample.
+We discovered that four samples are missing the response variable PH. There are a number of ways to address this issue but ultimately we decided to simply remove these samples. The goal of the model is to predict the PH level and we were concerned about biasing the data by imputing these values. In addition there is one major outlier whose PH level is several orders of magnitude higher than the other values. Although we ultimately selected a modeling technique that is robust to outliers, we believed that this value was either incorrectly recorded or the result of a massive aberration that is unlikely to be seen again. Thus, we felt it best to remove this sample.
 
 ```{r}
 student.data %>%
@@ -100,11 +100,11 @@ missing.data.plot(student.data.complete)
 missing.data.plot(student.evaluation.complete)
 ```
 
-With the data properly cleaned, we can now run our predictive model on it.
+With the data properly cleaned, we can now perform exploratory data analysis.
 
 ## EDA {.tabset}
 
-After cleaning the data we proceeded to perform exploratorary data analysis in order to better understand the data set that we are working with. Our dataset consists of 36 variables. One is our target variable, ph. 4 Variables are based on brand. For regression models, we'll use three of these, with brand a as the base class. Based on Cook's distance, we removed 8 variables.  For our regression based models, this improved RMSE by $\approx .003$. 2354 had the highest Cook's Distance, $\approx .1$.
+After cleaning the data we proceeded to perform exploratory data analysis in order to better understand the data set that we are working with. Our data set consists of 36 variables. One is our target variable, ph. 4 Variables are based on brand. For regression models, we'll use three of these, with brand a as the base class. Based on Cook's distance, we removed 8 variables.  For our regression based models, this improved RMSE by $\approx .003$. 2354 had the highest Cook's Distance, $\approx .1$.
 
 ```{r fig.width=7, fig.height=7, warning=FALSE}
 multi.model <- student.data.complete %>%
@@ -116,7 +116,7 @@ multi.model %>%
   influencePlot(id.method="identify", main="Influence Plot", sub="Circle size is proportial to Cook's Distance" )
 ```
 
-Within our model, 13 variables were signifcant at .001 significance: brand code b, mnfflow, carbpressure1, hydpressure3, temperature, usagecont, density, balling, pressurevacuum, oxygenfiller, bowlsetpoint, pressuresetpoint, ballinglvl.  An additionel 6 variables were significant at .05.
+Within our model, 13 variables were significant at .001 significance: brand code b, mnfflow, carbpressure1, hydpressure3, temperature, usagecont, density, balling, pressurevacuum, oxygenfiller, bowlsetpoint, pressuresetpoint, ballinglvl.  An additional 6 variables were significant at .05.
 
 ```{r}
 multi.model %>%
@@ -185,7 +185,7 @@ training <- listify(training)
 validation <- listify(validation)
 ```
 
-We iterated over numerous different predictive models including a variety of different regression based and rule based models. The code for all of these tests is available in our repo. We ultimately settled on using a Random Forest model due to it achieving the best performance in our cross fold validated testing. The below tabs show a selected set of the models we trained.
+We iterated over numerous different predictive models including a variety of different regression based and rule based models. The code for all of these tests is available in our repo. We ultimately settled on using a Random Forest model due to it achieving the best performance in our cross fold validated testing. We assessed the performance of each model based on the root mean square error.  The tabs below show a selected set of the models we trained.
 
 This model achieved an RMSE of $\approx0.0993$ in our cross validated testing and an $R^2 \approx 0.66$.
 
@@ -214,7 +214,7 @@ model <- train(x = training$x,
 model$results
 ```
 
-The best XG Boost model performed nearly as well as the Random Forest model and would serve as a good alternative choice for a model if needed. 
+The best XG Boost model performed nearly as well as the Random Forest model and would serve as a good alternative choice for a model, if needed. 
 
 ### Support Vector Machine
 
@@ -256,7 +256,7 @@ sqrt(rf$mse[best_tree])
 rf$rsq[best_tree]
 ```
 
-Below we can see the order of importance for each of the predictors in determining the response variable. This table also indicates that there are a number of predictors that could possibly be dropped from the model with little loss to the models predictive value. This may be an interesting avenue of exploration if we wanted to prioratize a model that can be easily interpreted. As it stands, while this model is highly accurate, it is not easy to interpret.
+Below we can see the order of importance for each of the predictors in determining the response variable. This table also indicates that there are a number of predictors that could possibly be dropped from the model with little loss to the model's predictive value. This may be an interesting avenue of exploration if we wanted to prioritize a model that can be easily interpreted. As it stands, while this model is highly accurate, it is not easy to interpret.
 
 ```{r}
 rf$importance %>%
@@ -266,7 +266,7 @@ rf$importance %>%
   datatable()
 ```
 
-With the model selected, we will finally run the model against the withheld validation data. This will give us a sense of how well the model will perform on data that it has never seen before. Our model scores a strong RMSE of appoximately 0.0975 with an $R^2$ of 0.7.
+With the model selected, we will finally run the model against the withheld validation data. This will give us a sense of how well the model will perform on data that it has never seen before. Our model scores a strong RMSE of approximately 0.0975 with an $R^2$ of 0.7.  
 
 ```{r}
 postResample(predict(rf, newdata=validation$x), validation$y)
@@ -304,14 +304,3 @@ predictions %>%
          row = rowname) %>%
   write_excel_csv('./data/predictions.csv')
 ```
-
-
-
-
-
-
-
-
-
-
-

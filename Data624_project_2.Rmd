@@ -116,14 +116,14 @@ plotter <- function(df, label_set,lab_num,colorbar='#dee253') {ggplot(df, aes_st
   
 ```{r plots-taba,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 
-plotter(beverage_set,label_set,2)
-plotter(beverage_set,label_set,3)
+#plotter(beverage_set,label_set,2)
+#plotter(beverage_set,label_set,3)
 plotter(beverage_set,label_set,4)
-plotter(beverage_set,label_set,5)
-plotter(beverage_set,label_set,6)
-plotter(beverage_set,label_set,7)
-plotter(beverage_set,label_set,8)
-
+#plotter(beverage_set,label_set,5)
+#plotter(beverage_set,label_set,6)
+#plotter(beverage_set,label_set,7)
+#plotter(beverage_set,label_set,8)
+ggsave('./brandcodeC.png')
 ```  
   
 ##B  
@@ -134,47 +134,50 @@ plotter(beverage_set,label_set,10)
 plotter(beverage_set,label_set,11)
 plotter(beverage_set,label_set,12)
 plotter(beverage_set,label_set,13)
-plotter(beverage_set,label_set,14)
+#plotter(beverage_set,label_set,14)
 plotter(beverage_set,label_set,15)
+#ggsave('./mnfflow.png')
 
 ```  
   
 ##C  
   
 ```{r plots-tabc,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
-plotter(beverage_set,label_set,16)
-plotter(beverage_set,label_set,17)
-plotter(beverage_set,label_set,18)
-plotter(beverage_set,label_set,19)
-plotter(beverage_set,label_set,20)
+#plotter(beverage_set,label_set,16)
+#plotter(beverage_set,label_set,17)
+#plotter(beverage_set,label_set,18)
+#plotter(beverage_set,label_set,19)
+#plotter(beverage_set,label_set,20)
 plotter(beverage_set,label_set,21)
-plotter(beverage_set,label_set,22)
-
+#plotter(beverage_set,label_set,22)
+ggsave('./fillerlevel.png')
 ```  
   
 ##D  
   
 ```{r plots-tabd,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
 plotter(beverage_set,label_set,23)
-plotter(beverage_set,label_set,24)
+#plotter(beverage_set,label_set,24)
 plotter(beverage_set,label_set,25)
 plotter(beverage_set,label_set,26)
 plotter(beverage_set,label_set,27)
 plotter(beverage_set,label_set,28)
 plotter(beverage_set,label_set,29)
+#ggsave('./usagecont.png')
 
 ```  
   
 ##E  
   
 ```{r plots-tabe,class.source='bob',echo=FALSE,warning=FALSE,message=FALSE, fig.width=3,fig.height=3,fig.showtext = TRUE}
-plotter(beverage_set,label_set,30)
+#plotter(beverage_set,label_set,30)
 plotter(beverage_set,label_set,31)
-plotter(beverage_set,label_set,32)
-plotter(beverage_set,label_set,33)
-plotter(beverage_set,label_set,34)
-plotter(beverage_set,label_set,35)
-plotter(beverage_set,label_set,36)
+#plotter(beverage_set,label_set,32)
+#plotter(beverage_set,label_set,33)
+#plotter(beverage_set,label_set,34)
+#plotter(beverage_set,label_set,35)
+#plotter(beverage_set,label_set,36)
+ggsave('./bowsletpoint.png')
 ```  
   
 #

@@ -121,7 +121,7 @@ rf$rsq[best_tree]
 ```
 
 ```{r}
-rf$importance
+rf$importance 
 ```
 
 <h2> Final Results </h2>
