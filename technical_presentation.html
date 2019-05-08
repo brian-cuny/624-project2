@@ -3023,12 +3023,10 @@ rf &lt;- randomForest(x = training$x,
                    y = training$y, 
                    importance=TRUE,
                    ntree=1000)
-
-best_tree &lt;- which(rf$mse==min(rf$mse))
-sqrt(rf$mse[best_tree])</code></pre>
-<pre><code>## [1] 0.09930006</code></pre>
-<pre class="r"><code>rf$rsq[best_tree]</code></pre>
-<pre><code>## [1] 0.6648867</code></pre>
+mean(sqrt(rf$mse))</code></pre>
+<pre><code>## [1] 0.1003276</code></pre>
+<pre class="r"><code>mean(rf$rsq)</code></pre>
+<pre><code>## [1] 0.6572274</code></pre>
 <p>Below we can see the order of importance for each of the predictors in determining the response variable. This table also indicates that there are a number of predictors that could possibly be dropped from the model with little loss to the model’s predictive value. This may be an interesting avenue of exploration if we wanted to prioritize a model that can be easily interpreted. As it stands, while this model is highly accurate, it is not easy to interpret.</p>
 <pre class="r"><code>rf$importance %&gt;%
   as.data.frame() %&gt;%
